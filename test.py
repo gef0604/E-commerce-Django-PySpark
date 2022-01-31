@@ -1,4 +1,5 @@
 import datetime
+import time
 from collections import namedtuple
 import json
 import findspark
@@ -8,6 +9,7 @@ from pyspark.conf import SparkConf
 from pyspark.sql import SparkSession, HiveContext
 from utils.spark_utils import insertHive
 from pyspark.accumulators import Accumulator
+
 def print_tuple(x):
     tuple_list = []
     for item in x[1]:
@@ -64,6 +66,18 @@ def get_datetime_minus_second(time1, time2):
     delta = d2 - d1
     return delta.seconds
 
+sparkSession = (SparkSession
+                        .builder
+                        .appName('example-pyspark-read-and-write-from-hive')
+                        .config("hive.metastore.uris", "thrift://localhost:9083", conf=SparkConf())
+                        .enableHiveSupport()
+                        .getOrCreate()
+                        )
+df1 = sparkSession.createDataFrame(data=[(1,2),(3,4)],schema=['a','b'])
+df2 = sparkSession.createDataFrame(data=[(1,2),(5,6)],schema=['a','b'])
+df3 = df1.intersect(df2)
+df3.show()
+# requirement1()
 # print(get_datetime_minus_second('2021-01-27 4:34:30','2021-01-27 4:35:06'))
 # print(1 >= 1)
 # res = [i * 300 for i in range(20)]
@@ -78,3 +92,12 @@ def get_datetime_minus_second(time1, time2):
 #     c = 5
 #     b()
 # a()
+# requirement1()
+# a = [1,2,3]
+#
+# b = (4,5,6)
+# c = dict(zip(b,a))
+# print(c)
+# s = "1234"
+# print(s[0:-3])
+
