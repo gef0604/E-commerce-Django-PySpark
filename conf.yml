@@ -1,0 +1,5 @@
+datasets:
+  dataset1:
+    source1_sql: select * from user_info_table limit 10
+    source2_sql: select * from user_info_table limit 15
+    identifier: user_id
