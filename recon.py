@@ -10,7 +10,7 @@ from pyspark.sql import SparkSession
 from pyspark import AccumulatorParam
 from openpyxl import load_workbook
 from collections import namedtuple
-import helper
+# import helper
 CONF_PATH = "conf.yml"
 EXCEL_PATH = "test.xlsx"
 
@@ -80,7 +80,7 @@ class SparkDataReconJob(SparkDataFrameJob):
             sqls = [conf['datasets'][dataset]['source1_sql'],conf['datasets'][dataset]['source2_sql']]
             l = SparkDataFrameFetcher().fetch(self.spark, sqls)
             # audit = self.audit(l[0],l[1])
-            res = self.field_to_field_compare(l[0], l[1], 'user_id')
+            res = self.field_to_field_compare(l[0], l[1], conf['datasets'][dataset]['identifier'])
             self.post(res)
     # field to field compare
     def field_to_field_compare(self, df1, df2, key):
@@ -151,7 +151,7 @@ class SparkDataReconJob(SparkDataFrameJob):
 
         # this rdd is: field1_src1, field1_src2, ....fieldx_src1, fieldx_src2
         # this is what we need in field to field compare sheet
-        aggr_rdd = grouped_union_rdd.map(lambda x : helper.unite_same_field(x)).cache()
+        aggr_rdd = grouped_union_rdd.map(lambda x : unite_same_field(x)).cache()
 
         # print("example after we put the same fields together:")
         # print(aggr_rdd)
@@ -281,7 +281,7 @@ class ExcelFormatter:
 class SparkDataReconExcelFormatter(ExcelFormatter):
     def format_field_to_field_excel(self, path):
         wb = load_workbook(path)
-        field_to_field = wb['Sheet1']
+        field_to_field = wb['field_to_field']
         # insert a row at before line 2
         """
         expected:
@@ -372,12 +372,12 @@ class UnitTest:
         recon = SparkDataReconJob()
         res = recon.field_to_field_compare(df1,df2,'a')
         recon.post(res)
-# SparkDataReconJob().execute()
-# SparkDataReconExcelFormatter().format_field_to_field_excel(EXCEL_PATH)
+SparkDataReconJob().execute()
+SparkDataReconExcelFormatter().format_field_to_field_excel(EXCEL_PATH)
 # SparkDataReconJob().audit(1,2)
 # SparkDataReconJob().test()
 # SparkDataReconJob().test_execute()
 # mock = Mock()
 # mock.generate()
 # mock.verify()
-UnitTest().test_spark_recon()
+# UnitTest().test_spark_recon()
