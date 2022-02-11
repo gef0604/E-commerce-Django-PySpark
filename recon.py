@@ -1,16 +1,19 @@
+import datetime
 import json
+
 
 import yaml
 import findspark
 import pandas as pd
 from pandas import ExcelWriter
 findspark.init()
+import pyspark.sql.functions
 from pyspark.conf import SparkConf
 from pyspark.sql import SparkSession
 from pyspark import AccumulatorParam
 from openpyxl import load_workbook
 from collections import namedtuple
-from pyspark.sql.types import StructField, StructType
+from pyspark.sql.types import StructField, StructType, TimestampType
 # import helper
 CONF_PATH = "conf.yml"
 EXCEL_PATH = "test.xlsx"
@@ -133,16 +136,21 @@ class SparkDataReconJob(SparkDataFrameJob):
             raw_schema = df1.schema
             index = 1
             newschema = StructType()
+            ts_cols = []
             for field in raw_schema:
                 newschema.add(StructField("_{}".format(str(index)), field.dataType, nullable=True))
+                if str(field.dataType) == "TimestampType":
+                    ts_cols.append("_{}".format(str(index)))
                 index = index + 1
                 newschema.add(StructField("_{}".format(str(index)), field.dataType, nullable=True))
+                if str(field.dataType) == "TimestampType":
+                    ts_cols.append("_{}".format(str(index)))
                 index = index + 1
 
             for field in newschema:
                 print(field)
 
-            return newschema
+            return newschema, ts_cols
         # count missing key
         df_missing_from_src1 = df2.select(key).subtract(df1.select(key))
         df_missing_from_src2 = df1.select(key).subtract(df2.select(key))
@@ -219,13 +227,22 @@ class SparkDataReconJob(SparkDataFrameJob):
         #                                      schema=["_{}".format(str(i + 1)) for i in
         #                                              range(2 * len(df1.columns))]).toPandas()
         # df_audit.to_excel(EXCEL_PATH, sheet_name='audit')
+        schema, ts_cols = zip_schema_from_same_table(df1)
+        print(ts_cols)
         try:
-            aggr_df = self.spark.createDataFrame(data=aggr_rdd.collect(),schema=zip_schema_from_same_table(df1)).toPandas()
+            aggr_df = self.spark.createDataFrame(data=aggr_rdd.collect(),schema=schema)
+            # cast all the ts into str type
+            for ts_col in ts_cols:
+                aggr_df = aggr_df.withColumn(ts_col, aggr_df[ts_col].cast('string'))
+            print(aggr_df.schema)
+            aggr_pd_df = aggr_df.toPandas()
             # aggr_df = aggr_rdd.toDF().toPandas()
+            # cast all the timestamp as string
         except:
-            aggr_df = self.spark.createDataFrame(data=aggr_rdd.collect()).toPandas()
+            aggr_df = aggr_rdd.toDF()
+            aggr_pd_df = aggr_df.toPandas()
             print(aggr_df)
-        return (aggr_df,df1.columns, df_audit)
+        return (aggr_pd_df,df1.columns, df_audit)
 
 
 
@@ -339,9 +356,9 @@ class DictAccumulatorParam(AccumulatorParam):
 class Mock:
 
     def generate(self):
-        mocked_model = namedtuple("mocked", ['a', 'b'])
-        src1 = [mocked_model(1,2), mocked_model(3,4)]
-        src2 = [mocked_model(1,3), mocked_model(5,6)]
+        mocked_model = namedtuple("mocked", ['a', 'b', 'c'])
+        src1 = [mocked_model(1,2,datetime.datetime(2018,1,1,1,1,1)), mocked_model(3,4,datetime.datetime(2018,1,1,1,1,1))]
+        src2 = [mocked_model(1,3,datetime.datetime(2018,1,1,1,1,1)), mocked_model(5,6,datetime.datetime(2018,1,1,1,1,1))]
 
         # insert hive, two different table
         sparkSession = (SparkSession
@@ -372,6 +389,18 @@ class Mock:
         sparkSession.sql("select * from test1").show()
         sparkSession.sql("select * from test2").show()
 class UnitTest:
+    def test_schema_change(self):
+        sparkSession = (SparkSession
+                        .builder
+                        .appName('example-pyspark-read-and-write-from-hive')
+                        .config("hive.metastore.uris", "thrift://localhost:9083", conf=SparkConf())
+                        .enableHiveSupport()
+                        .getOrCreate()
+                        )
+
+        df1 = sparkSession.sql("select * from test1")
+        for field in df1.schema:
+            print(str(field.dataType))
     def test_spark_recon(self):
         sparkSession = (SparkSession
                         .builder
@@ -426,3 +455,5 @@ SparkDataReconExcelFormatter().format_field_to_field_excel(EXCEL_PATH)
 # mock.generate()
 # mock.verify()
 # UnitTest().test_spark_recon()
+
+# UnitTest().test_schema_change()
