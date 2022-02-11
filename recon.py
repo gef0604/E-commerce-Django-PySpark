@@ -10,6 +10,7 @@ from pyspark.sql import SparkSession
 from pyspark import AccumulatorParam
 from openpyxl import load_workbook
 from collections import namedtuple
+from pyspark.sql.types import StructField, StructType
 # import helper
 CONF_PATH = "conf.yml"
 EXCEL_PATH = "test.xlsx"
@@ -127,7 +128,21 @@ class SparkDataReconJob(SparkDataFrameJob):
             # acc.add("qwe")
             return 1
         # case sensitive or not, need to deal with this to avoid bug
+        def zip_schema_from_same_table(df1):
 
+            raw_schema = df1.schema
+            index = 1
+            newschema = StructType()
+            for field in raw_schema:
+                newschema.add(StructField("_{}".format(str(index)), field.dataType, nullable=True))
+                index = index + 1
+                newschema.add(StructField("_{}".format(str(index)), field.dataType, nullable=True))
+                index = index + 1
+
+            for field in newschema:
+                print(field)
+
+            return newschema
         # count missing key
         df_missing_from_src1 = df2.select(key).subtract(df1.select(key))
         df_missing_from_src2 = df1.select(key).subtract(df2.select(key))
@@ -205,10 +220,10 @@ class SparkDataReconJob(SparkDataFrameJob):
         #                                              range(2 * len(df1.columns))]).toPandas()
         # df_audit.to_excel(EXCEL_PATH, sheet_name='audit')
         try:
-            aggr_df = aggr_rdd.toDF().toPandas()
+            aggr_df = self.spark.createDataFrame(data=aggr_rdd.collect(),schema=zip_schema_from_same_table(df1)).toPandas()
+            # aggr_df = aggr_rdd.toDF().toPandas()
         except:
-            aggr_df = self.spark.createDataFrame(data=aggr_rdd.collect(),
-                                                 schema=["_{}".format(str(i + 1)) for i in range(2 * len(df1.columns))]).toPandas()
+            aggr_df = self.spark.createDataFrame(data=aggr_rdd.collect()).toPandas()
             print(aggr_df)
         return (aggr_df,df1.columns, df_audit)
 
@@ -372,6 +387,36 @@ class UnitTest:
         recon = SparkDataReconJob()
         res = recon.field_to_field_compare(df1,df2,'a')
         recon.post(res)
+
+    def zip_two_schema_test(self):
+        sparkSession = (SparkSession
+                        .builder
+                        .appName('example-pyspark-read-and-write-from-hive')
+                        .config("hive.metastore.uris", "thrift://localhost:9083", conf=SparkConf())
+                        .enableHiveSupport()
+                        .getOrCreate()
+                        )
+
+        df1 = sparkSession.sql("select * from test1")
+        for field in df1.schema.__iter__():
+            print(field.dataType)
+
+    def zip_schema_from_same_table(self, df1):
+
+        raw_schema = df1.schema
+        index = 1
+        newschema = StructType()
+        for field in raw_schema:
+            newschema.add(StructField("_{}".format(str(index)), field.dataType, nullable=True))
+            index = index + 1
+            newschema.add(StructField("_{}".format(str(index)), field.dataType, nullable=True))
+            index = index + 1
+
+        for field in newschema:
+            print(field)
+
+        return newschema
+
 SparkDataReconJob().execute()
 SparkDataReconExcelFormatter().format_field_to_field_excel(EXCEL_PATH)
 # SparkDataReconJob().audit(1,2)
