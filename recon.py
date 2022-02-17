@@ -1,7 +1,7 @@
 import datetime
 import json
 
-
+import sys
 import yaml
 import findspark
 import pandas as pd
@@ -14,9 +14,10 @@ from pyspark import AccumulatorParam
 from openpyxl import load_workbook
 from collections import namedtuple
 from pyspark.sql.types import StructField, StructType, TimestampType
+import argparse
 # import helper
-CONF_PATH = "conf.yml"
-EXCEL_PATH = "test.xlsx"
+global CONF_PATH
+global EXCEL_PATH
 
 
 class DataJobAbstract:
@@ -446,6 +447,17 @@ class UnitTest:
 
         return newschema
 
+
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--conf_path", help="the path of the yml file")
+parser.add_argument("--excel_path", help="location of the output excel")
+args = parser.parse_args()
+
+print(args.__dict__)
+CONF_PATH = args.__dict__['conf_path']
+EXCEL_PATH = args.__dict__['excel_path']
 SparkDataReconJob().execute()
 SparkDataReconExcelFormatter().format_field_to_field_excel(EXCEL_PATH)
 # SparkDataReconJob().audit(1,2)
